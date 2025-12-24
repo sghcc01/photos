@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>文件服务器</title>
+    <style>
+        .file-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .file-item {
+            width: 120px;
+            text-align: center;
+        }
+        .file-name {
+            font-size: 14px;
+            margin-top: 5px;
+            white-space: normal;
+            word-wrap: break-word;
+        }
+        .file-size {
+            font-size: 12px;
+            color: #666;
+            margin-top: 3px;
+        }
+        .upload-form {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        /* 弹窗遮罩样式 */
+        .img-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+        /* 弹窗图片样式 */
+        .modal-img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body>
+<!-- 上传表单（不变） -->
+<div class="upload-form">
+    <form th:action="@{/file/upload}" method="post" enctype="multipart/form-data">
+        <input type="hidden" th:value="${currentDirPath}" name="targetDir"/>
+        <input type="file" name="file" multiple/>
+        <button type="submit">上传文件</button>
+    </form>
+</div>
+
+<!-- 面包屑（不变） -->
+<div style="padding: 0 20px;">
+    <th:block th:each="crumb : ${breadcrumbs}">
+        <a th:href="@{/file/list(dir=${crumb.encodedPath})}" th:text="${crumb.name}"></a>
+        <span>/</span>
+    </th:block>
+</div>
+
+<!-- 文件列表（含图片缩略图+弹窗预览） -->
+<div class="file-grid">
+    <div th:each="file : ${fileList}" class="file-item">
+        <div class="file-icon">
+            <!-- 文件夹图标（不变） -->
+            <th:block th:if="${file.dir}">
+                <svg width="60" height="50" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 20 L90 20 L90 70 L10 70 Z M10 20 L30 5 L80 5 L80 20"
+                          fill="#4285F4" stroke="#2D68C4" stroke-width="2"/>
+                </svg>
+            </th:block>
+
+            <!-- 非文件夹：判断 file.isImage，无需 #strings -->
+            <th:block th:unless="${file.dir}">
+                <!-- 图片文件：显示缩略图 -->
+                <th:block th:if="${file.isImage}">
+                    <img th:src="@{/file/access(dir=${currentDirPath}, fileName=${file.name})}"
+                         th:alt="${file.name}"
+                         th:data-img-url="@{/file/access(dir=${currentDirPath}, fileName=${file.name})}"
+                         onclick="showImgModal(this)"
+                         style="width: 60px; height: 50px; object-fit: cover; border: 1px solid #eee; cursor: pointer;"/>
+                </th:block>
+                <!-- 非图片文件：显示原有图标 -->
+                <th:block th:unless="${file.isImage}">
+                    <svg width="60" height="50" viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M20 10 L80 10 L90 20 L90 110 L10 110 L10 20 Z"
+                              fill="#F4B400" stroke="#D49A00" stroke-width="2"/>
+                        <path d="M20 30 L80 30 M20 45 L80 45 M20 60 L70 60"
+                              stroke="#FFF" stroke-width="2"/>
+                    </svg>
+                </th:block>
+            </th:block>
+        </div>
+
+        <div class="file-name">
+            <!-- 文件夹链接（不变） -->
+            <a th:if="${file.dir}"
+               th:href="@{/file/list(dir=${file.encodedPath})}"
+               style="text-decoration: none; color: #333;"
+               th:text="${file.name}">文件夹名称</a>
+
+            <!-- 非文件夹：根据 file.isImage 判断是否添加大图链接 -->
+            <th:block th:unless="${file.dir}">
+                <th:block th:if="${file.isImage}">
+                    <a th:href="@{/file/access(dir=${currentDirPath}, fileName=${file.name})}"
+                       target="_blank"
+                       style="text-decoration: none; color: #333;"
+                       th:text="${file.name}">图片文件名</a>
+                </th:block>
+                <span th:unless="${file.isImage}"
+                      th:text="${file.name}">非图片文件名</span>
+            </th:block>
+        </div>
+
+        <div class="file-size" th:unless="${file.dir}" th:text="${file.formattedSize}">0B</div>
+    </div>
+</div>
+
+<!-- 图片预览弹窗 -->
+<div class="img-modal" id="imgModal" onclick="hideImgModal()">
+    <img src="" alt="大图预览" class="modal-img" id="modalImg"/>
+</div>
+
+<!-- JS：弹窗显示/隐藏 -->
+<script type="text/javascript">
+        // 显示图片弹窗
+        function showImgModal(obj) {
+            var imgUrl = obj.getAttribute("data-img-url");
+            var modal = document.getElementById("imgModal");
+            var modalImg = document.getElementById("modalImg");
+            modalImg.src = imgUrl;
+            modal.style.display = "flex";
+        }
+
+        // 隐藏图片弹窗
+        function hideImgModal() {
+            var modal = document.getElementById("imgModal");
+            modal.style.display = "none";
+        }
+
+        // 按ESC键关闭弹窗
+        document.onkeydown = function(e) {
+            if (e.keyCode === 27) {
+                hideImgModal();
+            }
+        }
+    </script>
+</body>
+</html>
