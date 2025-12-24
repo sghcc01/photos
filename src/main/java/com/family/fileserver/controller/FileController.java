@@ -15,18 +15,102 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-
 import java.io.File;
 import java.io.IOException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Controller
 public class FileController {
     @Value("${file.shared.path}")
     private String defaultDir;
+
+    // 根路径访问，统一重定向到 /file/list，保持路径一致性
+    @GetMapping(value = {"", "/"})
+    public RedirectView index() {
+        return new RedirectView("/file/list");
+    }
+
+    // 文件列表查询接口，统一带 /file 前缀，与上传重定向路径匹配
+    @GetMapping("/file/list")
+    public String listFile(@RequestParam(value = "dir", required = false) String dir, Model model) {
+        System.out.println("前端传递的 dir 参数：" + dir);
+        // 处理 dir 参数，解码 + 非空判断
+        String currentDir;
+        try {
+            if (dir == null || dir.trim().isEmpty()) {
+                currentDir = defaultDir;
+            } else {
+                currentDir = URLDecoder.decode(dir, StandardCharsets.UTF_8.toString());
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            currentDir = defaultDir; // 异常时使用默认目录兜底
+        }
+
+        // 验证目录是否存在
+        File dirFile = new File(currentDir);
+        if (!dirFile.exists() || !dirFile.isDirectory()) {
+            currentDir = defaultDir; // 目录不存在时，切换到默认目录
+            dirFile = new File(currentDir);
+        }
+
+        // 打印目录信息，便于排查
+        System.out.println("=== 后端目录排查 ===");
+        System.out.println("当前目录路径：" + currentDir);
+        System.out.println("目录是否存在：" + dirFile.exists());
+        System.out.println("是否是目录：" + dirFile.isDirectory());
+
+        // 获取文件列表和面包屑（仅调用一次，避免冗余）
+        List<FileUtils.FileInfo> fileList = FileUtils.listFiles(currentDir);
+        List<FileUtils.Breadcrumb> breadcrumbs = FileUtils.buildBreadcrumbs(currentDir);
+        List<FileUtils.FileInfo> imageList = fileList.stream().filter(FileUtils.FileInfo::isImage).filter(f -> !f.isDir()).collect(Collectors.toList());
+        System.out.println("查询到的文件/文件夹数量：" + fileList.size());
+
+        // 传递数据到前端，键名与前端严格一致（大写L fileList）
+        model.addAttribute("currentDirPath", currentDir);
+        model.addAttribute("fileList", fileList); // 核心数据，前端遍历依赖
+        model.addAttribute("breadcrumbs", breadcrumbs);
+        model.addAttribute("imageList", imageList);
+
+        return "index"; // 对应 templates 目录下的 index.html
+    }
+
+    // 文件上传接口，上传后重定向回 /file/list
+    @PostMapping("/file/upload") // 统一带 /file 前缀，更规范
+    public RedirectView uploadFile(
+            @RequestParam("file") MultipartFile[] files,
+            @RequestParam("targetDir") String targetDir) {
+
+        // 遍历上传文件
+        for (MultipartFile file : files) {
+            if (file.isEmpty()) {
+                continue; // 跳过空文件
+            }
+            try {
+                FileUtils.uploadFile(file, targetDir);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        // 对目标目录编码，避免中文/特殊字符导致跳转异常
+        String encodedTargetDir = "";
+        if (targetDir != null && !targetDir.trim().isEmpty()) {
+            try {
+                encodedTargetDir = URLEncoder.encode(targetDir, StandardCharsets.UTF_8.toString());
+            } catch (Exception e) {
+                e.printStackTrace();
+                encodedTargetDir = targetDir;
+            }
+        }
+
+        // 重定向到文件列表接口，路径完全匹配
+        return new RedirectView("/file/list?dir=" + encodedTargetDir);
+    }
 
     /**
      * 动态访问文件/图片接口（支持子目录）
@@ -74,88 +158,5 @@ public class FileController {
             e.printStackTrace();
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
-    }
-
-    // 根路径访问，统一重定向到 /file/list，保持路径一致性
-    @GetMapping(value = {"", "/"})
-    public RedirectView index() {
-        return new RedirectView("/file/list");
-    }
-
-    // 文件列表查询接口，统一带 /file 前缀，与上传重定向路径匹配
-    @GetMapping("/file/list")
-    public String listFile(@RequestParam(value = "dir", required = false) String dir, Model model) {
-        System.out.println("前端传递的 dir 参数：" + dir);
-        // 处理 dir 参数，解码 + 非空判断
-        String currentDir;
-        try {
-            if (dir == null || dir.trim().isEmpty()) {
-                currentDir = defaultDir;
-            } else {
-                currentDir = URLDecoder.decode(dir, StandardCharsets.UTF_8.toString());
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            currentDir = defaultDir; // 异常时使用默认目录兜底
-        }
-
-        // 验证目录是否存在
-        File dirFile = new File(currentDir);
-        if (!dirFile.exists() || !dirFile.isDirectory()) {
-            currentDir = defaultDir; // 目录不存在时，切换到默认目录
-            dirFile = new File(currentDir);
-        }
-
-        // 打印目录信息，便于排查
-        System.out.println("=== 后端目录排查 ===");
-        System.out.println("当前目录路径：" + currentDir);
-        System.out.println("目录是否存在：" + dirFile.exists());
-        System.out.println("是否是目录：" + dirFile.isDirectory());
-
-        // 获取文件列表和面包屑（仅调用一次，避免冗余）
-        List<FileUtils.FileInfo> fileList = FileUtils.listFiles(currentDir);
-        List<FileUtils.Breadcrumb> breadcrumbs = FileUtils.buildBreadcrumbs(currentDir);
-
-        System.out.println("查询到的文件/文件夹数量：" + fileList.size());
-
-        // 传递数据到前端，键名与前端严格一致（大写L fileList）
-        model.addAttribute("currentDirPath", currentDir);
-        model.addAttribute("fileList", fileList); // 核心数据，前端遍历依赖
-        model.addAttribute("breadcrumbs", breadcrumbs);
-
-        return "index"; // 对应 templates 目录下的 index.html
-    }
-
-    // 文件上传接口，上传后重定向回 /file/list
-    @PostMapping("/file/upload") // 统一带 /file 前缀，更规范
-    public RedirectView uploadFile(
-            @RequestParam("file") MultipartFile[] files,
-            @RequestParam("targetDir") String targetDir) {
-
-        // 遍历上传文件
-        for (MultipartFile file : files) {
-            if (file.isEmpty()) {
-                continue; // 跳过空文件
-            }
-            try {
-                FileUtils.uploadFile(file, targetDir);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-
-        // 对目标目录编码，避免中文/特殊字符导致跳转异常
-        String encodedTargetDir = "";
-        if (targetDir != null && !targetDir.trim().isEmpty()) {
-            try {
-                encodedTargetDir = URLEncoder.encode(targetDir, StandardCharsets.UTF_8.toString());
-            } catch (Exception e) {
-                e.printStackTrace();
-                encodedTargetDir = targetDir;
-            }
-        }
-
-        // 重定向到文件列表接口，路径完全匹配
-        return new RedirectView("/file/list?dir=" + encodedTargetDir);
     }
 }

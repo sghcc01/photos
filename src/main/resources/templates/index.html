@@ -2,78 +2,210 @@
 <html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>文件服务器</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- 适配电脑端/移动端 -->
+    <title>文件服务器（支持图片预览）</title>
     <style>
+        /* 全局样式 - 电脑端适配 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+
+        /* 上传表单样式 */
+        .upload-form {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .upload-form input[type="file"] {
+            margin-right: 10px;
+            padding: 5px;
+        }
+        .upload-form button {
+            padding: 6px 16px;
+            background-color: #4285F4;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .upload-form button:hover {
+            background-color: #3367D6;
+        }
+
+        /* 面包屑样式 */
+        .breadcrumb {
+            background-color: #fff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .breadcrumb a {
+            color: #4285F4;
+            text-decoration: none;
+            margin-right: 5px;
+        }
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+        .breadcrumb span {
+            color: #666;
+            margin-right: 5px;
+        }
+
+        /* 文件列表样式 - 电脑端网格布局 */
         .file-grid {
             display: flex;
             flex-wrap: wrap;
-            gap: 20px;
-            padding: 20px;
-            margin-top: 20px;
+            gap: 24px;
+            padding: 0;
+
         }
         .file-item {
-            width: 120px;
+            width: 140px;
+            background-color: #fff;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             text-align: center;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .file-item:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .file-icon {
+            margin-bottom: 12px;
         }
         .file-name {
             font-size: 14px;
-            margin-top: 5px;
+            color: #333;
             white-space: normal;
             word-wrap: break-word;
+            margin-bottom: 8px;
+        }
+        .file-name a {
+            text-decoration: none;
+            color: #333;
+        }
+        .file-name a:hover {
+            color: #4285F4;
         }
         .file-size {
             font-size: 12px;
             color: #666;
-            margin-top: 3px;
+
         }
-        .upload-form {
-            padding: 20px;
-            border-bottom: 1px solid #eee;
-        }
-        /* 弹窗遮罩样式 */
+
+
+
+
+
+        /* 图片预览弹窗样式 - 电脑端适配 */
         .img-modal {
             display: none;
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.8);
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0,0,0,0.9);
             z-index: 9999;
             justify-content: center;
             align-items: center;
+            padding: 20px;
         }
-        /* 弹窗图片样式 */
+
+        .modal-content {
+            position: relative;
+            max-width: 90vw;
+            max-height: 90vh;
+        }
         .modal-img {
-            max-width: 90%;
-            max-height: 90%;
+            max-width: 100%;
+            max-height: 80vh;
             object-fit: contain;
+            border-radius: 4px;
+            cursor: zoom-in; /* 放大光标提示 */
+        }
+        .modal-img.zoomed {
+            cursor: zoom-out; /* 缩小光标提示 */
+            transform: scale(1.5); /* 放大比例 */
+            transition: transform 0.3s;
+        }
+
+        /* 翻页按钮样式 */
+        .nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 48px;
+            height: 48px;
+            background-color: rgba(255,255,255,0.2);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            z-index: 10;
+        }
+        .nav-btn:hover {
+            background-color: rgba(255,255,255,0.4);
+        }
+        .prev-btn {
+            left: -60px;
+        }
+        .next-btn {
+            right: -60px;
+        }
+
+        /* 图片索引样式 */
+        .img-index {
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
-<!-- 上传表单（不变） -->
+<!-- 上传表单 -->
 <div class="upload-form">
     <form th:action="@{/file/upload}" method="post" enctype="multipart/form-data">
         <input type="hidden" th:value="${currentDirPath}" name="targetDir"/>
-        <input type="file" name="file" multiple/>
+        <input type="file" name="file" multiple accept="*"/>
         <button type="submit">上传文件</button>
     </form>
 </div>
 
-<!-- 面包屑（不变） -->
-<div style="padding: 0 20px;">
+<!-- 面包屑导航 -->
+<div class="breadcrumb">
+
     <th:block th:each="crumb : ${breadcrumbs}">
         <a th:href="@{/file/list(dir=${crumb.encodedPath})}" th:text="${crumb.name}"></a>
         <span>/</span>
     </th:block>
 </div>
 
-<!-- 文件列表（含图片缩略图+弹窗预览） -->
+<!-- 文件列表 -->
 <div class="file-grid">
-    <div th:each="file : ${fileList}" class="file-item">
+    <div th:each="file, stat : ${fileList}" class="file-item">
         <div class="file-icon">
-            <!-- 文件夹图标（不变） -->
+            <!-- 文件夹图标 -->
             <th:block th:if="${file.dir}">
                 <svg width="60" height="50" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
                     <path d="M10 20 L90 20 L90 70 L10 70 Z M10 20 L30 5 L80 5 L80 20"
@@ -81,17 +213,18 @@
                 </svg>
             </th:block>
 
-            <!-- 非文件夹：判断 file.isImage，无需 #strings -->
+            <!-- 非文件夹：图片/普通文件区分 -->
             <th:block th:unless="${file.dir}">
-                <!-- 图片文件：显示缩略图 -->
+                <!-- 图片文件：缩略图 -->
                 <th:block th:if="${file.isImage}">
                     <img th:src="@{/file/access(dir=${currentDirPath}, fileName=${file.name})}"
                          th:alt="${file.name}"
                          th:data-img-url="@{/file/access(dir=${currentDirPath}, fileName=${file.name})}"
+                         th:data-img-index="${stat.index}"
                          onclick="showImgModal(this)"
                          style="width: 60px; height: 50px; object-fit: cover; border: 1px solid #eee; cursor: pointer;"/>
                 </th:block>
-                <!-- 非图片文件：显示原有图标 -->
+                <!-- 普通文件图标 -->
                 <th:block th:unless="${file.isImage}">
                     <svg width="60" height="50" viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">
                         <path d="M20 10 L80 10 L90 20 L90 110 L10 110 L10 20 Z"
@@ -104,22 +237,22 @@
         </div>
 
         <div class="file-name">
-            <!-- 文件夹链接（不变） -->
+            <!-- 文件夹链接 -->
             <a th:if="${file.dir}"
                th:href="@{/file/list(dir=${file.encodedPath})}"
-               style="text-decoration: none; color: #333;"
+
                th:text="${file.name}">文件夹名称</a>
 
-            <!-- 非文件夹：根据 file.isImage 判断是否添加大图链接 -->
+            <!-- 非文件夹：图片/普通文件区分 -->
             <th:block th:unless="${file.dir}">
                 <th:block th:if="${file.isImage}">
                     <a th:href="@{/file/access(dir=${currentDirPath}, fileName=${file.name})}"
                        target="_blank"
-                       style="text-decoration: none; color: #333;"
+
                        th:text="${file.name}">图片文件名</a>
                 </th:block>
-                <span th:unless="${file.isImage}"
-                      th:text="${file.name}">非图片文件名</span>
+                <span th:unless="${file.isImage}" th:text="${file.name}">非图片文件名</span>
+
             </th:block>
         </div>
 
@@ -127,34 +260,172 @@
     </div>
 </div>
 
-<!-- 图片预览弹窗 -->
-<div class="img-modal" id="imgModal" onclick="hideImgModal()">
-    <img src="" alt="大图预览" class="modal-img" id="modalImg"/>
+<!-- 图片预览弹窗（支持翻页/滑动/放大） -->
+<div class="img-modal" id="imgModal" onclick="hideImgModal(event)">
+    <div class="modal-content">
+        <!-- 上一张按钮 -->
+        <button class="nav-btn prev-btn" onclick="prevImg(event)">&lt;</button>
+        <!-- 图片 -->
+        <img src="" alt="大图预览" class="modal-img" id="modalImg" onclick="toggleImgZoom(event)"/>
+        <!-- 下一张按钮 -->
+        <button class="nav-btn next-btn" onclick="nextImg(event)">&gt;</button>
+        <!-- 图片索引 -->
+        <div class="img-index" id="imgIndex">1 / 1</div>
+    </div>
 </div>
 
-<!-- JS：弹窗显示/隐藏 -->
+
+
 <script type="text/javascript">
+        let currentImgIndex = 0; // 当前显示图片索引
+        let imageList = []; // 图片列表
+        let isImgZoomed = false; // 图片是否放大
+
+        // 初始化图片列表
+        window.onload = function() {
+            // 从后端获取图片列表
+            /* 若前端无法直接获取，可通过以下方式手动收集
+            const imgElements = document.querySelectorAll('img[data-img-url]');
+            imageList = Array.from(imgElements).map(img => ({
+                url: img.getAttribute('data-img-url'),
+                index: parseInt(img.getAttribute('data-img-index'))
+            }));
+            */
+            // 直接使用后端传递的 imageList
+            th:each="img : ${imageList}"
+            imageList = [[${imageList}]]; // Thymeleaf 直接渲染图片列表
+        }
+
         // 显示图片弹窗
         function showImgModal(obj) {
-            var imgUrl = obj.getAttribute("data-img-url");
-            var modal = document.getElementById("imgModal");
-            var modalImg = document.getElementById("modalImg");
+            const imgUrl = obj.getAttribute('data-img-url');
+            currentImgIndex = parseInt(obj.getAttribute('data-img-index'));
+            // 若手动收集图片列表，替换为：
+            // currentImgIndex = imageList.findIndex(item => item.url === imgUrl);
+
+            const modal = document.getElementById('imgModal');
+            const modalImg = document.getElementById('modalImg');
+            const imgIndex = document.getElementById('imgIndex');
+
+            // 重置图片状态
+            isImgZoomed = false;
+            modalImg.classList.remove('zoomed');
             modalImg.src = imgUrl;
-            modal.style.display = "flex";
+            // 更新索引显示
+            imgIndex.innerText = (currentImgIndex + 1) + ' / ' + imageList.length;
+            // 显示弹窗
+            modal.style.display = 'flex';
         }
 
         // 隐藏图片弹窗
-        function hideImgModal() {
-            var modal = document.getElementById("imgModal");
-            modal.style.display = "none";
+        function hideImgModal(event) {
+
+
+            // 点击图片区域不关闭弹窗
+            if (event && event.target.id === 'modalImg') {
+                return;
+            }
+            const modal = document.getElementById('imgModal');
+            modal.style.display = 'none';
+            // 重置状态
+            isImgZoomed = false;
+            currentImgIndex = 0;
         }
 
-        // 按ESC键关闭弹窗
+        // 切换图片放大/缩小
+        function toggleImgZoom(event) {
+            event.stopPropagation(); // 阻止冒泡关闭弹窗
+            const modalImg = document.getElementById('modalImg');
+            isImgZoomed = !isImgZoomed;
+            if (isImgZoomed) {
+                modalImg.classList.add('zoomed');
+            } else {
+                modalImg.classList.remove('zoomed');
+            }
+        }
+
+        // 上一张图片
+        function prevImg(event) {
+            event.stopPropagation(); // 阻止冒泡关闭弹窗
+            if (imageList.length <= 1) {
+                return;
+            }
+            currentImgIndex = (currentImgIndex - 1 + imageList.length) % imageList.length;
+            updateModalImg();
+        }
+
+        // 下一张图片
+        function nextImg(event) {
+            event.stopPropagation(); // 阻止冒泡关闭弹窗
+            if (imageList.length <= 1) {
+                return;
+            }
+            currentImgIndex = (currentImgIndex + 1) % imageList.length;
+            updateModalImg();
+        }
+
+        // 更新弹窗图片
+        function updateModalImg() {
+            const modalImg = document.getElementById('modalImg');
+            const imgIndex = document.getElementById('imgIndex');
+            // 重置放大状态
+            isImgZoomed = false;
+            modalImg.classList.remove('zoomed');
+            // 更新图片和索引
+            modalImg.src = imageList[currentImgIndex].name
+                ? [[@{/file/access(dir=${currentDirPath}, fileName='')}]] + imageList[currentImgIndex].name
+                : imageList[currentImgIndex].url;
+            imgIndex.innerText = (currentImgIndex + 1) + ' / ' + imageList.length;
+        }
+
+        // 键盘事件：ESC关闭弹窗，左右箭头切换图片
         document.onkeydown = function(e) {
+            const modal = document.getElementById('imgModal');
+            if (modal.style.display !== 'flex') {
+                return;
+            }
+            // ESC键关闭
             if (e.keyCode === 27) {
                 hideImgModal();
             }
+            // 左箭头上一张
+            else if (e.keyCode === 37) {
+                prevImg(e);
+            }
+            // 右箭头下一张
+            else if (e.keyCode === 39) {
+                nextImg(e);
+            }
         }
+
+        // 鼠标滑动切换图片（电脑端适配）
+        let startX = 0;
+        const modalImg = document.getElementById('modalImg');
+        modalImg.addEventListener('touchstart', function(e) {
+            startX = e.touches[0].clientX;
+        });
+        modalImg.addEventListener('touchend', function(e) {
+            const endX = e.changedTouches[0].clientX;
+            const diffX = endX - startX;
+            if (diffX > 50) {
+                prevImg(e); // 向右滑：上一张
+            } else if (diffX < -50) {
+                nextImg(e); // 向左滑：下一张
+            }
+        });
+        // 电脑端鼠标拖拽切换
+        modalImg.addEventListener('mousedown', function(e) {
+            startX = e.clientX;
+        });
+        modalImg.addEventListener('mouseup', function(e) {
+            const endX = e.clientX;
+            const diffX = endX - startX;
+            if (diffX > 20) {
+                prevImg(e);
+            } else if (diffX < -20) {
+                nextImg(e);
+            }
+        });
     </script>
 </body>
 </html>
