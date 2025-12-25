@@ -105,12 +105,7 @@
         .file-size {
             font-size: 12px;
             color: #666;
-
         }
-
-
-
-
 
         /* 图片预览弹窗样式 - 电脑端适配 */
         .img-modal {
@@ -180,6 +175,71 @@
             color: #fff;
             font-size: 14px;
         }
+                .img-modal {
+            display: none; /* 默认隐藏 */
+            position: fixed; /* 固定定位，不随滚动条移动 */
+            top: 0;
+            left: 0;
+            width: 100vw; /* 全屏宽度 */
+            height: 100vh; /* 全屏高度 */
+            background: rgba(0, 0, 0, 0.7); /* 半透明灰色背景 */
+            z-index: 9999; /* 最高层级，确保在所有元素上方 */
+            justify-content: center; /* 水平居中图片 */
+            align-items: center; /* 垂直居中图片 */
+            padding: 20px; /* 左右内边距 */
+        }
+        /* 弹窗内容容器 */
+        .modal-content {
+            position: relative;
+            max-width: 90vw;
+            max-height: 90vh;
+        }
+        /* 弹窗图片样式 */
+        .modal-img {
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+            border-radius: 8px;
+            cursor: zoom-in;
+        }
+        .modal-img.zoomed {
+            cursor: zoom-out;
+            transform: scale(1.5);
+            transition: transform 0.3s ease;
+        }
+        /* 翻页按钮样式 */
+        .nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 48px;
+            height: 48px;
+            background-color: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            z-index: 10;
+        }
+        .prev-btn { left: -60px; }
+        .next-btn { right: -60px; }
+        .nav-btn:hover {
+            background-color: rgba(255, 255, 255, 0.4);
+        }
+        /* 图片索引样式 */
+        .img-index {
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 2px 10px;
+            border-radius: 10px;
+        }
     </style>
 </head>
 <body>
@@ -191,7 +251,6 @@
         <button type="submit">上传文件</button>
     </form>
 </div>
-
 <!-- 面包屑导航 -->
 <div class="breadcrumb">
 
@@ -200,19 +259,20 @@
         <span>/</span>
     </th:block>
 </div>
-
 <!-- 文件列表 -->
 <div class="file-grid">
     <div th:each="file, stat : ${fileList}" class="file-item">
         <div class="file-icon">
             <!-- 文件夹图标 -->
             <th:block th:if="${file.dir}">
-                <svg width="60" height="50" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M10 20 L90 20 L90 70 L10 70 Z M10 20 L30 5 L80 5 L80 20"
-                          fill="#4285F4" stroke="#2D68C4" stroke-width="2"/>
-                </svg>
+                <a th:href="@{/file/list(dir=${file.encodedPath})}"
+                style="display: inline-block; text-decoration: none;">
+                    <svg width="60" height="50" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M10 20 L90 20 L90 70 L10 70 Z M10 20 L30 5 L80 5 L80 20"
+                              fill="#4285F4" stroke="#2D68C4" stroke-width="2"/>
+                    </svg>
+                </a>
             </th:block>
-
             <!-- 非文件夹：图片/普通文件区分 -->
             <th:block th:unless="${file.dir}">
                 <!-- 图片文件：缩略图 -->
@@ -221,8 +281,10 @@
                          th:alt="${file.name}"
                          th:data-img-url="@{/file/access(dir=${currentDirPath}, fileName=${file.name})}"
                          th:data-img-index="${stat.index}"
-                         onclick="showImgModal(this)"
-                         style="width: 60px; height: 50px; object-fit: cover; border: 1px solid #eee; cursor: pointer;"/>
+                         onclick="showImgModal(this);"
+                    style="width: 60px; height: 50px; object-fit: cover; border: 1px solid #eee; cursor: pointer;
+                    pointer-events: auto; z-index: 1;" alt="img"/>
+
                 </th:block>
                 <!-- 普通文件图标 -->
                 <th:block th:unless="${file.isImage}">
@@ -235,31 +297,27 @@
                 </th:block>
             </th:block>
         </div>
-
         <div class="file-name">
             <!-- 文件夹链接 -->
             <a th:if="${file.dir}"
                th:href="@{/file/list(dir=${file.encodedPath})}"
-
                th:text="${file.name}">文件夹名称</a>
-
             <!-- 非文件夹：图片/普通文件区分 -->
             <th:block th:unless="${file.dir}">
                 <th:block th:if="${file.isImage}">
-                    <a th:href="@{/file/access(dir=${currentDirPath}, fileName=${file.name})}"
-                       target="_blank"
-
-                       th:text="${file.name}">图片文件名</a>
+                    <a href="javascript:;"
+                    th:data-img-url="@{/file/access(dir=${currentDirPath}, fileName=${file.name})}"
+                    th:data-img-index="${stat.index}"
+                    onclick="showImgModal(this)"
+                    style="text-decoration: none; color: #333;"
+                    th:text="${file.name}">图片文件名</a>
                 </th:block>
                 <span th:unless="${file.isImage}" th:text="${file.name}">非图片文件名</span>
-
             </th:block>
         </div>
-
         <div class="file-size" th:unless="${file.dir}" th:text="${file.formattedSize}">0B</div>
     </div>
 </div>
-
 <!-- 图片预览弹窗（支持翻页/滑动/放大） -->
 <div class="img-modal" id="imgModal" onclick="hideImgModal(event)">
     <div class="modal-content">
@@ -274,67 +332,47 @@
     </div>
 </div>
 
-
-
 <script type="text/javascript">
-        let currentImgIndex = 0; // 当前显示图片索引
-        let imageList = []; // 图片列表
-        let isImgZoomed = false; // 图片是否放大
+        let currentImgIndex = 0;
+        let imageList = [];
+        let isImgZoomed = false;
 
         // 初始化图片列表
-        window.onload = function() {
-            // 从后端获取图片列表
-            /* 若前端无法直接获取，可通过以下方式手动收集
-            const imgElements = document.querySelectorAll('img[data-img-url]');
-            imageList = Array.from(imgElements).map(img => ({
-                url: img.getAttribute('data-img-url'),
-                index: parseInt(img.getAttribute('data-img-index'))
+        window.unload = function() {
+            const imgElements = document.querySelectorAll('img[data-img-url], a[data-img-url]');
+            imageList = Array.from(imgElements).map(el => ({
+                url: el.getAttribute('data-img-url'),
+                index: parseInt(el.getAttribute('data-img-index'))
             }));
-            */
-            // 直接使用后端传递的 imageList
-            th:each="img : ${imageList}"
-            imageList = [[${imageList}]]; // Thymeleaf 直接渲染图片列表
-        }
+        };
 
-        // 显示图片弹窗
+        // 显示弹窗
         function showImgModal(obj) {
             const imgUrl = obj.getAttribute('data-img-url');
             currentImgIndex = parseInt(obj.getAttribute('data-img-index'));
-            // 若手动收集图片列表，替换为：
-            // currentImgIndex = imageList.findIndex(item => item.url === imgUrl);
-
             const modal = document.getElementById('imgModal');
             const modalImg = document.getElementById('modalImg');
             const imgIndex = document.getElementById('imgIndex');
 
-            // 重置图片状态
             isImgZoomed = false;
             modalImg.classList.remove('zoomed');
             modalImg.src = imgUrl;
-            // 更新索引显示
             imgIndex.innerText = (currentImgIndex + 1) + ' / ' + imageList.length;
-            // 显示弹窗
             modal.style.display = 'flex';
         }
 
-        // 隐藏图片弹窗
+        // 隐藏弹窗
         function hideImgModal(event) {
-
-
-            // 点击图片区域不关闭弹窗
-            if (event && event.target.id === 'modalImg') {
+            if (event && (event.target.id === 'modalImg' || event.target.classList.contains('modal-content'))) {
                 return;
             }
             const modal = document.getElementById('imgModal');
             modal.style.display = 'none';
-            // 重置状态
-            isImgZoomed = false;
-            currentImgIndex = 0;
         }
 
-        // 切换图片放大/缩小
+        // 图片放大/缩小
         function toggleImgZoom(event) {
-            event.stopPropagation(); // 阻止冒泡关闭弹窗
+            event.stopPropagation();
             const modalImg = document.getElementById('modalImg');
             isImgZoomed = !isImgZoomed;
             if (isImgZoomed) {
@@ -344,22 +382,17 @@
             }
         }
 
-        // 上一张图片
+        // 上一张/下一张图片
         function prevImg(event) {
-            event.stopPropagation(); // 阻止冒泡关闭弹窗
-            if (imageList.length <= 1) {
-                return;
-            }
+            event.stopPropagation();
+            if (imageList.length <= 1) return;
             currentImgIndex = (currentImgIndex - 1 + imageList.length) % imageList.length;
             updateModalImg();
         }
 
-        // 下一张图片
         function nextImg(event) {
-            event.stopPropagation(); // 阻止冒泡关闭弹窗
-            if (imageList.length <= 1) {
-                return;
-            }
+            event.stopPropagation();
+            if (imageList.length <= 1) return;
             currentImgIndex = (currentImgIndex + 1) % imageList.length;
             updateModalImg();
         }
@@ -368,64 +401,24 @@
         function updateModalImg() {
             const modalImg = document.getElementById('modalImg');
             const imgIndex = document.getElementById('imgIndex');
-            // 重置放大状态
             isImgZoomed = false;
             modalImg.classList.remove('zoomed');
-            // 更新图片和索引
-            modalImg.src = imageList[currentImgIndex].name
-                ? [[@{/file/access(dir=${currentDirPath}, fileName='')}]] + imageList[currentImgIndex].name
-                : imageList[currentImgIndex].url;
+            modalImg.src = imageList[currentImgIndex].url;
             imgIndex.innerText = (currentImgIndex + 1) + ' / ' + imageList.length;
         }
 
-        // 键盘事件：ESC关闭弹窗，左右箭头切换图片
-        document.onkeydown = function(e) {
+        // 键盘事件
+        document.on keydown = function(e) {
             const modal = document.getElementById('imgModal');
-            if (modal.style.display !== 'flex') {
-                return;
-            }
-            // ESC键关闭
+            if (modal.style.display !== 'flex') return;
             if (e.keyCode === 27) {
                 hideImgModal();
-            }
-            // 左箭头上一张
-            else if (e.keyCode === 37) {
+            } else if (e.keyCode === 37) {
                 prevImg(e);
-            }
-            // 右箭头下一张
-            else if (e.keyCode === 39) {
+            } else if (e.keyCode === 39) {
                 nextImg(e);
             }
-        }
-
-        // 鼠标滑动切换图片（电脑端适配）
-        let startX = 0;
-        const modalImg = document.getElementById('modalImg');
-        modalImg.addEventListener('touchstart', function(e) {
-            startX = e.touches[0].clientX;
-        });
-        modalImg.addEventListener('touchend', function(e) {
-            const endX = e.changedTouches[0].clientX;
-            const diffX = endX - startX;
-            if (diffX > 50) {
-                prevImg(e); // 向右滑：上一张
-            } else if (diffX < -50) {
-                nextImg(e); // 向左滑：下一张
-            }
-        });
-        // 电脑端鼠标拖拽切换
-        modalImg.addEventListener('mousedown', function(e) {
-            startX = e.clientX;
-        });
-        modalImg.addEventListener('mouseup', function(e) {
-            const endX = e.clientX;
-            const diffX = endX - startX;
-            if (diffX > 20) {
-                prevImg(e);
-            } else if (diffX < -20) {
-                nextImg(e);
-            }
-        });
+        };
     </script>
 </body>
 </html>

@@ -21,8 +21,6 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.stream.Collectors;
-
 @Controller
 public class FileController {
     @Value("${file.shared.path}")
@@ -37,7 +35,6 @@ public class FileController {
     // 文件列表查询接口，统一带 /file 前缀，与上传重定向路径匹配
     @GetMapping("/file/list")
     public String listFile(@RequestParam(value = "dir", required = false) String dir, Model model) {
-        System.out.println("前端传递的 dir 参数：" + dir);
         // 处理 dir 参数，解码 + 非空判断
         String currentDir;
         try {
@@ -67,7 +64,7 @@ public class FileController {
         // 获取文件列表和面包屑（仅调用一次，避免冗余）
         List<FileUtils.FileInfo> fileList = FileUtils.listFiles(currentDir);
         List<FileUtils.Breadcrumb> breadcrumbs = FileUtils.buildBreadcrumbs(currentDir);
-        List<FileUtils.FileInfo> imageList = fileList.stream().filter(FileUtils.FileInfo::isImage).filter(f -> !f.isDir()).collect(Collectors.toList());
+        List<FileUtils.FileInfo> imageList = fileList.stream().filter(FileUtils.FileInfo::isImage).filter(f -> !f.isDir()).toList();
         System.out.println("查询到的文件/文件夹数量：" + fileList.size());
 
         // 传递数据到前端，键名与前端严格一致（大写L fileList）
@@ -101,7 +98,7 @@ public class FileController {
         String encodedTargetDir = "";
         if (targetDir != null && !targetDir.trim().isEmpty()) {
             try {
-                encodedTargetDir = URLEncoder.encode(targetDir, StandardCharsets.UTF_8.toString());
+                encodedTargetDir = URLEncoder.encode(targetDir, StandardCharsets.UTF_8);
             } catch (Exception e) {
                 e.printStackTrace();
                 encodedTargetDir = targetDir;
@@ -128,7 +125,7 @@ public class FileController {
             if (dir == null || dir.trim().isEmpty()) {
                 currentDir = defaultDir;
             } else {
-                currentDir = URLDecoder.decode(dir, StandardCharsets.UTF_8.toString());
+                currentDir = URLDecoder.decode(dir, StandardCharsets.UTF_8);
             }
 
             // 2. 拼接完整本地文件路径
