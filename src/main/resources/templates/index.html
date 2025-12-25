@@ -283,7 +283,7 @@
                          th:data-img-index="${stat.index}"
                          onclick="showImgModal(this);"
                     style="width: 60px; height: 50px; object-fit: cover; border: 1px solid #eee; cursor: pointer;
-                    pointer-events: auto; z-index: 1;" alt="img"/>
+                    pointer-events: auto; z-index: 1;"/>
 
                 </th:block>
                 <!-- 普通文件图标 -->
@@ -338,7 +338,7 @@
         let isImgZoomed = false;
 
         // 初始化图片列表
-        window.unload = function() {
+        window.onload = function() {
             const imgElements = document.querySelectorAll('img[data-img-url], a[data-img-url]');
             imageList = Array.from(imgElements).map(el => ({
                 url: el.getAttribute('data-img-url'),
@@ -408,7 +408,7 @@
         }
 
         // 键盘事件
-        document.on keydown = function(e) {
+        document.onkeydown = function(e) {
             const modal = document.getElementById('imgModal');
             if (modal.style.display !== 'flex') return;
             if (e.keyCode === 27) {
