@@ -140,25 +140,6 @@
             transition: transform 0.3s;
         }
 
-        /* 翻页按钮样式 */
-        .nav-btn {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 48px;
-            height: 48px;
-            background-color: rgba(255,255,255,0.2);
-            color: #fff;
-            border: none;
-            border-radius: 50%;
-            font-size: 24px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-            z-index: 10;
-        }
-        .nav-btn:hover {
-            background-color: rgba(255,255,255,0.4);
-        }
         .prev-btn {
             left: -60px;
         }
@@ -214,19 +195,64 @@
             transform: translateY(-50%);
             width: 48px;
             height: 48px;
-            background-color: rgba(255, 255, 255, 0.2);
-            color: #fff;
+            /* 关键修改：加深背景色，0.9比0.7更黑更醒目，可调整为1（纯黑） */
+            background-color: rgba(0, 0, 0, 0.9) !important;
+            color: #fff !important; /* 白色文字，与黑色背景对比强烈，更易看清 */
             border: none;
             border-radius: 50%;
             font-size: 24px;
-            cursor: pointer;
-            transition: background-color 0.3s;
             z-index: 10;
+            /* 保留所有不变色的配置 */
+            -webkit-tap-highlight-color: transparent;
+            tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            touch-callout: none;
+            cursor: pointer !important;
+            transition: none !important;
+            outline: none !important;
+            box-shadow: none !important;
         }
         .prev-btn { left: -60px; }
         .next-btn { right: -60px; }
-        .nav-btn:hover {
-            background-color: rgba(255, 255, 255, 0.4);
+        /* 电脑端（屏幕>768px）：保留hover样式和过渡 */
+        @media screen and (min-width: 769px) {
+            .nav-btn {
+                background-color: rgba(255, 255, 255, 0.2);
+                transition: background-color 0.3s;
+            }
+            .nav-btn:hover {
+                background-color: rgba(255, 255, 255, 0.4);
+            }
+            .prev-btn { left: -60px; }
+            .next-btn { right: -60px; }
+        }
+        /* 手机端（屏幕≤768px）：锁死颜色，无任何变色 */
+        @media screen and (max-width: 768px) {
+            /* 手机端：按钮移到图片内侧，贴近边缘，不超出屏幕 */
+            .prev-btn {
+                left: 10px; /* 左侧内侧10px，完全在屏幕可视区域内 */
+            }
+            .next-btn {
+                right: 10px; /* 右侧内侧10px，完全在屏幕可视区域内 */
+            }
+
+            /* 手机端：按钮适当调大，更易点击 */
+            .nav-btn {
+                width: 48px;
+                height: 48px;
+                font-size: 22px;
+            }
+
+            /* 可选：手机端图片弹窗适当缩小内边距，适配小屏幕 */
+            .img-modal {padding: 10px; }
+            .modal-img {max-height: 70vh; }
+        }
+        /* .nav-btn:hover {background-color: rgba(255, 255, 255, 0.4); } */
+        .nav-btn:active {
+            background-color: rgba(0, 0, 0, 0.9) !important;
+            color: #fff !important;
+            border: none !important;
+            outline: none !important;
         }
         /* 图片索引样式 */
         .img-index {
@@ -339,17 +365,25 @@
 
         // 初始化图片列表
         window.onload = function() {
-            const imgElements = document.querySelectorAll('img[data-img-url], a[data-img-url]');
+            const imgElements = document.querySelectorAll('img[data-img-url]');
             imageList = Array.from(imgElements).map(el => ({
                 url: el.getAttribute('data-img-url'),
                 index: parseInt(el.getAttribute('data-img-index'))
             }));
+            console.log("图片列表长度（实际图片数）：", imageList.length);
         };
 
         // 显示弹窗
         function showImgModal(obj) {
             const imgUrl = obj.getAttribute('data-img-url');
-            currentImgIndex = parseInt(obj.getAttribute('data-img-index'));
+            if (imageList.length === 0) {
+                console.warn("图片列表为空，无法显示大图");
+                return;
+            }
+            currentImgIndex = imageList.findIndex(item => item.url === imgUrl);
+            if (currentImgIndex === -1) {
+                currentImgIndex = 0;
+            }
             const modal = document.getElementById('imgModal');
             const modalImg = document.getElementById('modalImg');
             const imgIndex = document.getElementById('imgIndex');
@@ -357,7 +391,10 @@
             isImgZoomed = false;
             modalImg.classList.remove('zoomed');
             modalImg.src = imgUrl;
-            imgIndex.innerText = (currentImgIndex + 1) + ' / ' + imageList.length;
+            const totalImg = imageList.length > 0 ? imageList.length : 1;
+            const currentNum = currentImgIndex + 1;
+            const safeCurrentNum = currentNum > totalImg ? totalImg : currentNum;
+            imgIndex.innerText = safeCurrentNum + ' / ' + totalImg;
             modal.style.display = 'flex';
         }
 
@@ -403,8 +440,16 @@
             const imgIndex = document.getElementById('imgIndex');
             isImgZoomed = false;
             modalImg.classList.remove('zoomed');
-            modalImg.src = imageList[currentImgIndex].url;
-            imgIndex.innerText = (currentImgIndex + 1) + ' / ' + imageList.length;
+            if (currentImgIndex < 0) currentImgIndex = 0;
+            if (currentImgIndex >= imageList.length) currentImgIndex = imageList.length - 1;
+
+            const currentImgUrl = imageList[currentImgIndex].url;
+            if (currentImgUrl) {
+                modalImg.src = currentImgUrl; // 赋值正确的图片地址，触发图片刷新
+            }
+            const totalImg = imageList.length > 0 ? imageList.length : 1;
+            const safeCurrentNum = currentImgIndex + 1;
+            imgIndex.innerText = safeCurrentNum + ' / ' + totalImg;
         }
 
         // 键盘事件
