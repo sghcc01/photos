@@ -85,8 +85,14 @@
             transform: translateY(-4px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
         }
-        .file-icon {
-            margin-bottom: 12px;
+        .file-icon img {
+            /* 缩略图加载中显示浅灰色占位 */
+            background-color: #eeeeee;
+            /* 可选：加加载提示文字（比如“加载中”，但图片加载后会覆盖） */
+            color: #999;
+            /* 确保占位色可见，直到图片加载完成 */
+            display: inline-block;
+            vertical-align: middle;
         }
         .file-name {
             font-size: 14px;
@@ -120,24 +126,46 @@
             justify-content: center;
             align-items: center;
             padding: 20px;
+            /* 新增1：禁止遮罩内的滚动（针对iOS） */
+            overflow: hidden;
+            /* 新增2：强制层级最高，覆盖所有元素 */
+            position: fixed !important;
+            /* 新增3：禁止触摸事件穿透到底层页面 */
+            touch-action: none;
+            -webkit-overflow-scrolling: touch; /* 兼容iOS Safari */
+            backdrop-filter: blur(1px); /* 可选：加深遮罩效果，视觉上更明显 */
         }
-
         .modal-content {
             position: relative;
             max-width: 90vw;
             max-height: 90vh;
         }
+        /* 新增：图片加载中样式 */
         .modal-img {
             max-width: 100%;
             max-height: 80vh;
             object-fit: contain;
-            border-radius: 4px;
-            cursor: zoom-in; /* 放大光标提示 */
+            border-radius: 8px;
+            cursor: zoom-in;
+            /* 加载中背景色，提示用户 */
+            background-color: #f5f5f5;
+            /* 加载过渡，避免闪屏 */
+            transition: opacity 0.3s ease;
         }
+
         .modal-img.zoomed {
             cursor: zoom-out; /* 缩小光标提示 */
             transform: scale(1.5); /* 放大比例 */
             transition: transform 0.3s;
+        }
+        /* 图片加载完成后显示 */
+        .modal-img[src]:not([src=""]) {
+            opacity: 1;
+        }
+
+        /* 加载中半透明提示 */
+        .modal-img:not([src]) {
+            opacity: 0.5;
         }
 
         .prev-btn {
@@ -146,7 +174,6 @@
         .next-btn {
             right: -60px;
         }
-
         /* 图片索引样式 */
         .img-index {
             position: absolute;
@@ -156,37 +183,11 @@
             color: #fff;
             font-size: 14px;
         }
-                .img-modal {
-            display: none; /* 默认隐藏 */
-            position: fixed; /* 固定定位，不随滚动条移动 */
-            top: 0;
-            left: 0;
-            width: 100vw; /* 全屏宽度 */
-            height: 100vh; /* 全屏高度 */
-            background: rgba(0, 0, 0, 0.7); /* 半透明灰色背景 */
-            z-index: 9999; /* 最高层级，确保在所有元素上方 */
-            justify-content: center; /* 水平居中图片 */
-            align-items: center; /* 垂直居中图片 */
-            padding: 20px; /* 左右内边距 */
-        }
         /* 弹窗内容容器 */
         .modal-content {
             position: relative;
             max-width: 90vw;
             max-height: 90vh;
-        }
-        /* 弹窗图片样式 */
-        .modal-img {
-            max-width: 100%;
-            max-height: 80vh;
-            object-fit: contain;
-            border-radius: 8px;
-            cursor: zoom-in;
-        }
-        .modal-img.zoomed {
-            cursor: zoom-out;
-            transform: scale(1.5);
-            transition: transform 0.3s ease;
         }
         /* 翻页按钮样式 */
         .nav-btn {
@@ -266,6 +267,15 @@
             padding: 2px 10px;
             border-radius: 10px;
         }
+        .lazy-img {
+            background-color: #f5f5f5; /* 浅灰占位 */
+            opacity: 0.8; /* 加载前半透明 */
+            transition: opacity 0.3s;
+        }
+        /* 加载完成后恢复 */
+        .lazy-img.loaded {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -303,14 +313,14 @@
             <th:block th:unless="${file.dir}">
                 <!-- 图片文件：缩略图 -->
                 <th:block th:if="${file.isImage}">
-                    <img th:src="@{/file/access(dir=${currentDirPath}, fileName=${file.name})}"
+                    <img th:data-src="@{/file/access(dir=${currentDirPath}, fileName=${file.name})}"
                          th:alt="${file.name}"
                          th:data-img-url="@{/file/access(dir=${currentDirPath}, fileName=${file.name})}"
                          th:data-img-index="${stat.index}"
                          onclick="showImgModal(this);"
-                    style="width: 60px; height: 50px; object-fit: cover; border: 1px solid #eee; cursor: pointer;
-                    pointer-events: auto; z-index: 1;"/>
-
+                         class="lazy-img"
+                         style="width: 60px; height: 50px; object-fit: cover; border: 1px solid #eee; cursor: pointer;
+                         pointer-events: auto; z-index: 1; background-color: #eeeeee;"/>
                 </th:block>
                 <!-- 普通文件图标 -->
                 <th:block th:unless="${file.isImage}">
@@ -359,111 +369,196 @@
 </div>
 
 <script type="text/javascript">
-        let currentImgIndex = 0;
-        let imageList = [];
-        let isImgZoomed = false;
+    document.addEventListener('error', e => {
+        if (e.target.tagName === 'IMG' && e.target.src.includes('file/access')) {
+            e.preventDefault();
+        }
+    }, true);
+    document.addEventListener('load', e => {
+        if (e.target.tagName === 'IMG' && e.target.src.includes('file/access')) {
+            e.preventDefault();
+        }
+    }, true);
+    function preloadNearbyImgs(currentEl) {
+        if (!currentEl) return;
+        const allImgs = Array.from(document.querySelectorAll('.lazy-img'));
+        const currentIdx = allImgs.findIndex(el => el === currentEl);
+        if (currentIdx === -1) return;
 
-        // 初始化图片列表
-        window.onload = function() {
-            const imgElements = document.querySelectorAll('img[data-img-url]');
-            imageList = Array.from(imgElements).map(el => ({
-                url: el.getAttribute('data-img-url'),
-                index: parseInt(el.getAttribute('data-img-index'))
-            }));
-            console.log("图片列表长度（实际图片数）：", imageList.length);
-        };
-
-        // 显示弹窗
-        function showImgModal(obj) {
-            const imgUrl = obj.getAttribute('data-img-url');
-            if (imageList.length === 0) {
-                console.warn("图片列表为空，无法显示大图");
-                return;
+        // 预加载：上一张 + 下一张（仅2张，避免耗资源）
+        const preloadIdxs = [currentIdx - 1, currentIdx + 1].filter(idx => idx >= 0 && idx < allImgs.length);
+        preloadIdxs.forEach(idx => {
+            const imgUrl = allImgs[idx].getAttribute('data-img-url');
+            // 已预加载过的不再重复加载
+            if (imgUrl && !preloadedImgs.has(imgUrl)) {
+                const preloadImg = new Image();
+                preloadImg.timeout = setTimeout(() => {
+                    preloadImg.src = ''; // 终止加载
+                }, 3000); // 3秒加载不完就终止
+                // 加载完成/失败后清除超时
+                preloadImg.onload = preloadImg.onerror = () => clearTimeout(preloadImg.timeout);
+                preloadImg.src = imgUrl;
+                preloadedImgs.set(imgUrl, preloadImg); // 存入缓存
             }
-            currentImgIndex = imageList.findIndex(item => item.url === imgUrl);
-            if (currentImgIndex === -1) {
-                currentImgIndex = 0;
-            }
-            const modal = document.getElementById('imgModal');
-            const modalImg = document.getElementById('modalImg');
-            const imgIndex = document.getElementById('imgIndex');
+        });
+    }
+    // ========== 缩略图懒加载核心代码 ==========
+    function lazyLoadImgs() {
+        const lazyImgs = document.querySelectorAll('.lazy-img:not(.loaded)');
+        if (!lazyImgs.length) return;
 
-            isImgZoomed = false;
+        // 获取可视区域范围
+        const viewportTop = window.scrollY;
+        const viewportBottom = viewportTop + window.innerHeight;
+
+        lazyImgs.forEach(img => {
+            const imgRect = img.getBoundingClientRect();
+            const imgTop = viewportTop + imgRect.top;
+            // 图片进入可视区域（或距离可视区域100px内）时加载
+            if (imgTop < viewportBottom + 100) {
+                img.src = img.getAttribute('data-src');
+                img.onload = () => img.classList.add('loaded');
+                img.onerror = () => img.classList.add('loaded'); // 加载失败也标记
+            }
+        });
+    }
+
+    // 初始化：加载首屏缩略图
+    document.addEventListener('DOMContentLoaded', lazyLoadImgs);
+    // 滚动时加载新区域的缩略图
+    window.addEventListener('scroll', lazyLoadImgs);
+    // 窗口大小变化时重新加载
+    window.addEventListener('resize', lazyLoadImgs);
+
+    let currentImgElement = null; // 保存当前点击的图片元素，替代原有列表
+    let isImgZoomed = false;
+    // 新增：预加载的大图缓存
+    let preloadedImgs = new Map();
+    // 核心优化：点击图片时即时打开，无需等所有缩略图加载
+    // ========== 修改原有showImgModal函数（新增预加载） ==========
+    function showImgModal(obj) {
+        currentImgElement = obj;
+        const modal = document.getElementById('imgModal');
+        const modalImg = document.getElementById('modalImg');
+        const imgIndex = document.getElementById('imgIndex');
+        // 1. 优先显示弹窗（视觉无延迟）
+        modal.style.display = 'flex';
+        isImgZoomed = false;
+        modalImg.classList.remove('zoomed');
+        modalImg.src = obj.getAttribute('data-img-url');
+
+        // 2. 异步处理索引计算+预加载（不阻塞弹窗显示）
+        setTimeout(() => {
+            const currentIndex = parseInt(obj.getAttribute('data-img-index')) || 0;
+            const totalImg = document.querySelectorAll('.lazy-img').length || 1;
+            imgIndex.innerText = (currentIndex + 1) + ' / ' + totalImg;
+            // 预加载放到异步，不影响弹窗打开/关闭
+            preloadNearbyImgs(obj);
+        }, 0);
+
+        // 3. 异步设置body样式（避免同步阻塞）
+        setTimeout(() => {
+            document.body.style.overflow = 'hidden';
+            document.body.style.touchAction = 'none';
+        }, 0);
+    }
+
+    // 优化：上一张图片（按需查找，无需预加载列表）
+    function prevImg(event) {
+        event.stopPropagation();
+        if (!currentImgElement) return;
+
+        // 1. 找到所有图片元素（即时查找，不依赖预加载）
+        const allImgElements = Array.from(document.querySelectorAll('img[data-img-url]'));
+        if (allImgElements.length <= 1) return;
+
+        // 2. 找到当前元素的上一个兄弟元素
+        const currentIndex = allImgElements.findIndex(el => el === currentImgElement);
+        if (currentIndex > 0) {
+            currentImgElement = allImgElements[currentIndex - 1];
+            // 立即更新弹窗
+            updateModalByElement(currentImgElement);
+        }
+    }
+
+    // 优化：下一张图片（按需查找）
+    function nextImg(event) {
+        event.stopPropagation();
+        if (!currentImgElement) return;
+
+        const allImgElements = Array.from(document.querySelectorAll('img[data-img-url]'));
+        if (allImgElements.length <= 1) return;
+
+        const currentIndex = allImgElements.findIndex(el => el === currentImgElement);
+        if (currentIndex < allImgElements.length - 1) {
+            currentImgElement = allImgElements[currentIndex + 1];
+            updateModalByElement(currentImgElement);
+        }
+    }
+
+    // 辅助函数：根据元素更新弹窗（即时加载，无需预加载）
+    function updateModalByElement(el) {
+        const modalImg = document.getElementById('modalImg');
+        const imgIndex = document.getElementById('imgIndex');
+
+        isImgZoomed = false;
+        modalImg.classList.remove('zoomed');
+        // 即时获取URL，触发图片加载
+        modalImg.src = el.getAttribute('data-img-url');
+
+        // 即时计算索引和总数
+        const currentIndex = parseInt(el.getAttribute('data-img-index')) || 0;
+        const totalImg = document.querySelectorAll('.lazy-img').length || 1;
+        imgIndex.innerText = (currentIndex + 1) + ' / ' + totalImg;
+        // 关键：切换后预加载新的相邻大图
+        preloadNearbyImgs(el);
+    }
+
+    // 保留原有隐藏弹窗、放大缩小、键盘事件逻辑（无需修改）
+    function hideImgModal(event) {
+        // 1. 优先隐藏弹窗（核心：先执行，视觉上无停顿）
+        const modal = document.getElementById('imgModal');
+        modal.style.display = 'none';
+        // 2. 事件判断放到弹窗隐藏后（避免阻塞）
+        if (event && (event.target.id === 'modalImg' || event.target.classList.contains('modal-content'))) {
+            currentImgElement = null;
+            return;
+        }
+        // 3. 异步重置body样式（避免同步重排重绘耗时）
+        setTimeout(() => {
+            document.body.style.overflow = '';
+            document.body.style.touchAction = '';
+            currentImgElement = null; // 异步重置变量，不阻塞关闭
+        }, 0); // 0延迟：放入浏览器异步队列，不影响当前关闭动作
+
+        // 4. 可选：清理预加载缓存（异步执行，避免阻塞）
+        setTimeout(() => {
+            preloadedImgs.clear(); // 清空大图预加载缓存，释放内存
+        }, 100); // 延迟100ms，不影响关闭响应
+    }
+
+    function toggleImgZoom(event) {
+        event.stopPropagation();
+        const modalImg = document.getElementById('modalImg');
+        isImgZoomed = !isImgZoomed;
+        if (isImgZoomed) {
+            modalImg.classList.add('zoomed');
+        } else {
             modalImg.classList.remove('zoomed');
-            modalImg.src = imgUrl;
-            const totalImg = imageList.length > 0 ? imageList.length : 1;
-            const currentNum = currentImgIndex + 1;
-            const safeCurrentNum = currentNum > totalImg ? totalImg : currentNum;
-            imgIndex.innerText = safeCurrentNum + ' / ' + totalImg;
-            modal.style.display = 'flex';
         }
+    }
 
-        // 隐藏弹窗
-        function hideImgModal(event) {
-            if (event && (event.target.id === 'modalImg' || event.target.classList.contains('modal-content'))) {
-                return;
-            }
-            const modal = document.getElementById('imgModal');
-            modal.style.display = 'none';
+    document.onkeydown = function(e) {
+        const modal = document.getElementById('imgModal');
+        if (modal.style.display !== 'flex') return;
+        if (e.keyCode === 27) {
+            hideImgModal();
+        } else if (e.keyCode === 37) {
+            prevImg(e);
+        } else if (e.keyCode === 39) {
+            nextImg(e);
         }
-
-        // 图片放大/缩小
-        function toggleImgZoom(event) {
-            event.stopPropagation();
-            const modalImg = document.getElementById('modalImg');
-            isImgZoomed = !isImgZoomed;
-            if (isImgZoomed) {
-                modalImg.classList.add('zoomed');
-            } else {
-                modalImg.classList.remove('zoomed');
-            }
-        }
-
-        // 上一张/下一张图片
-        function prevImg(event) {
-            event.stopPropagation();
-            if (imageList.length <= 1) return;
-            currentImgIndex = (currentImgIndex - 1 + imageList.length) % imageList.length;
-            updateModalImg();
-        }
-
-        function nextImg(event) {
-            event.stopPropagation();
-            if (imageList.length <= 1) return;
-            currentImgIndex = (currentImgIndex + 1) % imageList.length;
-            updateModalImg();
-        }
-
-        // 更新弹窗图片
-        function updateModalImg() {
-            const modalImg = document.getElementById('modalImg');
-            const imgIndex = document.getElementById('imgIndex');
-            isImgZoomed = false;
-            modalImg.classList.remove('zoomed');
-            if (currentImgIndex < 0) currentImgIndex = 0;
-            if (currentImgIndex >= imageList.length) currentImgIndex = imageList.length - 1;
-
-            const currentImgUrl = imageList[currentImgIndex].url;
-            if (currentImgUrl) {
-                modalImg.src = currentImgUrl; // 赋值正确的图片地址，触发图片刷新
-            }
-            const totalImg = imageList.length > 0 ? imageList.length : 1;
-            const safeCurrentNum = currentImgIndex + 1;
-            imgIndex.innerText = safeCurrentNum + ' / ' + totalImg;
-        }
-
-        // 键盘事件
-        document.onkeydown = function(e) {
-            const modal = document.getElementById('imgModal');
-            if (modal.style.display !== 'flex') return;
-            if (e.keyCode === 27) {
-                hideImgModal();
-            } else if (e.keyCode === 37) {
-                prevImg(e);
-            } else if (e.keyCode === 39) {
-                nextImg(e);
-            }
-        };
+    };
     </script>
 </body>
 </html>
