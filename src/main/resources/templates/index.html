@@ -280,13 +280,62 @@
 </head>
 <body>
 <!-- 上传表单 -->
-<div class="upload-form">
+<div id="uploadForm" class="upload-form" enctype="multipart/form-data">
     <form th:action="@{/file/upload}" method="post" enctype="multipart/form-data">
         <input type="hidden" th:value="${currentDirPath}" name="targetDir"/>
-        <input type="file" name="file" multiple accept="*"/>
-        <button type="submit">上传文件</button>
+        <input type="file" name="file" multiple accept="image/*"/>
+        <button type="button" onclick="uploadFile()">上传文件</button>
     </form>
+    <!-- 新增：上传反馈提示（默认隐藏） -->
+    <div id="uploadTip" style="margin-top: 10px; padding: 8px; border-radius: 4px; display: none; text-align: center;">
+    </div>
 </div>
+
+<script>
+    // 直接粘贴独立上传函数，不用改任何内容
+    function uploadFile() {
+      // 1. 强制获取表单和提示框（写死id，避免变量问题）
+      const form = document.querySelector('form[action="/file/upload"]');
+      const tip = document.getElementById('uploadTip');
+
+      // 2. 验证表单是否存在
+        if (!form) {
+          alert("上传表单缺失！");
+          return;
+        }
+        if (!tip) {
+          alert("上传提示框缺失！");
+          return;
+        }
+
+      // 3. 构建FormData（直接传form，确保是表单元素）
+      const formData = new FormData(form);
+
+      // 4. 显示上传提示
+      tip.style.display = 'block';
+      tip.style.background = '#f0f9ff';
+      tip.textContent = '正在上传...';
+
+      // 5. AJAX上传
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/file/upload', true);
+      xhr.onload = function() {
+        tip.style.display = 'none';
+        if (xhr.status === 200) {
+          alert("上传成功：\n" + xhr.responseText);
+          setTimeout(() => window.location.reload(), 1000);
+        } else {
+          alert("上传失败：\n" + (xhr.responseText || xhr.status));
+        }
+      };
+      xhr.onerror = function() {
+        tip.style.display = 'none';
+        alert("上传失败：网络异常");
+      };
+      xhr.send(formData);
+    }
+</script>
+
 <!-- 面包屑导航 -->
 <div class="breadcrumb">
 
@@ -369,6 +418,7 @@
 </div>
 
 <script type="text/javascript">
+
     document.addEventListener('error', e => {
         if (e.target.tagName === 'IMG' && e.target.src.includes('file/access')) {
             e.preventDefault();
@@ -379,6 +429,10 @@
             e.preventDefault();
         }
     }, true);
+
+    // 新增：页面加载后绑定上传事件（放在现有JS开头）
+
+
     function preloadNearbyImgs(currentEl) {
         if (!currentEl) return;
         const allImgs = Array.from(document.querySelectorAll('.lazy-img'));

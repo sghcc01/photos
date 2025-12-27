@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 @Controller
 public class FileController {
@@ -78,35 +79,56 @@ public class FileController {
 
     // 文件上传接口，上传后重定向回 /file/list
     @PostMapping("/file/upload") // 统一带 /file 前缀，更规范
-    public RedirectView uploadFile(
-            @RequestParam("file") MultipartFile[] files,
-            @RequestParam("targetDir") String targetDir) {
-
+    public ResponseEntity<Object> uploadFile(@RequestParam("file") MultipartFile[] files,@RequestParam("targetDir") String targetDir) {
+        List<String> resultList = new ArrayList<>(); // 存储每个文件的上传结果
+        boolean hasError = false;
+        // 对目标目录编码，避免中文/特殊字符导致跳转异常
+//        String encodedTargetDir = "";
+//        if (targetDir != null && !targetDir.trim().isEmpty()) {
+//            try {
+//                encodedTargetDir = URLEncoder.encode(targetDir, StandardCharsets.UTF_8);
+//            } catch (Exception e) {
+//                e.printStackTrace();
+//                encodedTargetDir = targetDir;
+//            }
+//        }
         // 遍历上传文件
         for (MultipartFile file : files) {
             if (file.isEmpty()) {
+                resultList.add("跳过空文件");
                 continue; // 跳过空文件
             }
             try {
+                File uploadDir = new File(targetDir); // 实际写入还是用原始路径
+                if (!uploadDir.exists() && !uploadDir.mkdirs()) {
+                    // 提示中用编码后的路径，避免中文乱码
+                    resultList.add("文件[" + file.getOriginalFilename() + "]上传失败：目录[" + targetDir + "]创建失败");
+                    hasError = true;
+                    continue;
+                }
+
                 FileUtils.uploadFile(file, targetDir);
+
+                File destFile = new File(targetDir, file.getOriginalFilename());
+                if (!destFile.exists() || destFile.length() == 0) {
+                    resultList.add("文件[" + file.getOriginalFilename() + "]上传失败：目录[" + targetDir + "]写入空文件");
+                    hasError = true;
+                } else {
+                    resultList.add("文件[" + file.getOriginalFilename() + "]上传成功（存储路径：" + targetDir + "）");
+                }
+
             } catch (IOException e) {
                 e.printStackTrace();
+                resultList.add("文件[" + file.getOriginalFilename() + "]上传失败：目录[" + targetDir + "]，原因：" + e.getMessage());
+                hasError = true;
             }
         }
-
-        // 对目标目录编码，避免中文/特殊字符导致跳转异常
-        String encodedTargetDir = "";
-        if (targetDir != null && !targetDir.trim().isEmpty()) {
-            try {
-                encodedTargetDir = URLEncoder.encode(targetDir, StandardCharsets.UTF_8);
-            } catch (Exception e) {
-                e.printStackTrace();
-                encodedTargetDir = targetDir;
-            }
+        if (hasError) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("部分文件上传失败：" + resultList);
+        } else {
+            return ResponseEntity.ok("所有文件上传成功：" + resultList);
         }
-
-        // 重定向到文件列表接口，路径完全匹配
-        return new RedirectView("/file/list?dir=" + encodedTargetDir);
     }
 
     /**
